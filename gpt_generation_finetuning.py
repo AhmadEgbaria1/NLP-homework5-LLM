@@ -45,7 +45,7 @@ def finetune_one(ds_text, save_dir, seed=42):
 
     args = TrainingArguments(
         output_dir=save_dir,
-        num_train_epochs=2,
+        num_train_epochs=3,
         per_device_train_batch_size=1,      # safe for 4GB VRAM
         gradient_accumulation_steps=8,      # effective batch ~8
         learning_rate=5e-5,
@@ -100,16 +100,16 @@ def generate_samples(model, tokenizer, n=10, max_new_tokens=60):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument(r"C:\Users\Win10\PycharmProjects\NLP-homework5-LLM\imdb_subset", type=str, required=True, help="path to imdb_subset")
-    parser.add_argument(r"C:\Users\Win10\PycharmProjects\NLP-homework5-LLM\gpt2_output", type=str, required=True, help="path to reviews_generated.txt")
+    parser.add_argument("--subset_path", type=str, required=True, help="path to imdb_subset")
+    parser.add_argument("--output_file", type=str, required=True, help="path to reviews_generated.txt")
     parser.add_argument("--models_dir", type=str, required=True, help="directory to save finetuned models")
     args = parser.parse_args()
 
     subset = load_from_disk(args.subset_path)
 
     # 1 = positive, 0 = negative in IMDb
-    pos = subset.filter(lambda x: x["label"] == 1).shuffle(seed=42).select(range(100))
-    neg = subset.filter(lambda x: x["label"] == 0).shuffle(seed=42).select(range(100))
+    pos = subset.filter(lambda x: x["label"] == 1).shuffle(seed=42).select(range(150))
+    neg = subset.filter(lambda x: x["label"] == 0).shuffle(seed=42).select(range(150))
 
     pos_dir = os.path.join(args.models_dir, "gpt2_positive")
     neg_dir = os.path.join(args.models_dir, "gpt2_negative")
