@@ -41,9 +41,6 @@ def make_prompts(review_text: str) -> dict:
         "Review: I loved this movie. The acting was great and the story was amazing.\n"
         "Sentiment: positive\n\n"
         "Example 2:\n"
-        "Review: This movie was terrible. The plot was boring and the acting was bad.\n"
-        "Sentiment: negative\n"
-         "Example 3:\n"
         "Review: At first I thought it would be boring and I almost turned it off, but the story gets better and the ending was great. I really enjoyed it.\n"
         "Sentiment: positive\n"
         "Now classify this review:\n\n"
@@ -53,13 +50,12 @@ def make_prompts(review_text: str) -> dict:
 
     # INSTRUCTION-BASED (more explicit constraints)
     instruction_based = (
-        "You are a sentiment classifier for movies reviews.\n"
-        "Task: Determine if the movie review is positive or negative.\n"
-        "Rules:\n"
-        "1) Output exactly one word: positive OR negative.\n"
-        "2) Do not output anything else.\n\n"
-        f"Movie review:\n{review_text}\n\n"
+        "Determine the OVERALL sentiment of the following movie review.\n"
+        "Focus on the reviewer's final opinion.\n"
+        "Output only one word: positive or negative.\n\n"
+        f"Review:\n{review_text}\n\n"
         "Answer:"
+
     )
 
     return {
@@ -122,11 +118,11 @@ def main():
                 correct_inst += 1
 
             # 4) Write results in the required format
-            f.write(f">Review {i}: {review_text}\n")
-            f.write(f">Review {i} true label: {true_label}\n")
-            f.write(f">Review {i} zero-shot: {pred_zero if pred_zero else 'INVALID_OUTPUT'}\n")
-            f.write(f">Review {i} few-shot: {pred_few if pred_few else 'INVALID_OUTPUT'}\n")
-            f.write(f">Review {i} instruction-based: {pred_inst if pred_inst else 'INVALID_OUTPUT'}\n\n")
+            f.write(f"Review {i}: <{review_text}>\n")
+            f.write(f"Review {i} true label: <{true_label}>\n")
+            f.write(f"Review {i} zero-shot: <{pred_zero if pred_zero else 'INVALID_OUTPUT'}>\n")
+            f.write(f"Review {i} few-shot: <{pred_few if pred_few else 'INVALID_OUTPUT'}>\n")
+            f.write(f"Review {i} instruction-based: <{pred_inst if pred_inst else 'INVALID_OUTPUT'}>\n\n")
 
         # 5) Accuracy summary at the end
         acc_zero = correct_zero / total

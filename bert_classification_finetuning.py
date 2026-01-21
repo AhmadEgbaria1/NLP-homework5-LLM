@@ -27,7 +27,7 @@ def tokenize(batch):
 train_ds = train_ds.map(tokenize, batched=True)
 test_ds = test_ds.map(tokenize, batched=True)
 
-# Trainer מצפה לעמודה בשם "labels"
+# Trainer work with column called "labels"
 train_ds = train_ds.rename_column("label", "labels")
 test_ds = test_ds.rename_column("label", "labels")
 
@@ -56,7 +56,7 @@ training_args = TrainingArguments(
     learning_rate=2e-5,
     per_device_train_batch_size=8,
     per_device_eval_batch_size=8,
-    num_train_epochs=3,
+    num_train_epochs=4,
     fp16=True,                     # GPU
     logging_steps=10,
     report_to="none"
