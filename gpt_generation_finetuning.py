@@ -4,8 +4,7 @@ import numpy as np
 import torch
 from datasets import load_from_disk
 from transformers import (
-    AutoTokenizer,
-    AutoModelForCausalLM,
+    GPT2Tokenizer, GPT2LMHeadModel,
     Trainer,
     TrainingArguments,
     DataCollatorForLanguageModeling,
@@ -14,8 +13,7 @@ from transformers import (
 
 PROMPT = "The movie was"
 
-def build_lm_dataset(ds, tokenizer, max_length=128):
-    # Tokenize texts for causal LM
+def build_lm_dataset(ds, tokenizer, max_length=150):
     def tok(batch):
         return tokenizer(
             batch["text"],
@@ -23,7 +21,6 @@ def build_lm_dataset(ds, tokenizer, max_length=128):
             max_length=max_length,
         )
     tokenized = ds.map(tok, batched=True, remove_columns=ds.column_names)
-    # Trainer expects "labels" for loss computation; for causal LM labels=input_ids
     tokenized = tokenized.map(lambda x: {"labels": x["input_ids"]})
     tokenized.set_format("torch")
     return tokenized
@@ -32,22 +29,20 @@ def finetune_one(ds_text, save_dir, seed=42):
     os.makedirs(save_dir, exist_ok=True)
     set_seed(seed)
 
-    tokenizer = AutoTokenizer.from_pretrained("gpt2")
-    model = AutoModelForCausalLM.from_pretrained("gpt2")
+    tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+    model = GPT2LMHeadModel.from_pretrained("gpt2")
 
-    # GPT-2 has no pad token by default -> set to eos to allow batching
     tokenizer.pad_token = tokenizer.eos_token
     model.config.pad_token_id = tokenizer.eos_token_id
 
-    train_ds = build_lm_dataset(ds_text, tokenizer, max_length=128)
-
+    train_ds = build_lm_dataset(ds_text, tokenizer, max_length=150)
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
-    args = TrainingArguments(
+    training_args = TrainingArguments(
         output_dir=save_dir,
         num_train_epochs=3,
-        per_device_train_batch_size=1,      # safe for 4GB VRAM
-        gradient_accumulation_steps=8,      # effective batch ~8
+        per_device_train_batch_size=1,
+        gradient_accumulation_steps=8,
         learning_rate=5e-5,
         warmup_ratio=0.05,
         fp16=True,
@@ -58,36 +53,34 @@ def finetune_one(ds_text, save_dir, seed=42):
 
     trainer = Trainer(
         model=model,
-        args=args,
+        args=training_args,
         train_dataset=train_ds,
         data_collator=data_collator,
     )
 
     trainer.train()
-    trainer.save_model(save_dir)
+
+
+    trainer.model.save_pretrained(save_dir)
     tokenizer.save_pretrained(save_dir)
+
     return model, tokenizer
 
 @torch.no_grad()
-def generate_samples(model, tokenizer, n=10, max_new_tokens=60):
+def generate_samples(model, tokenizer, n=10, max_new_tokens=100):
     model.eval()
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)
 
-    inputs = tokenizer(
-        PROMPT,
-        return_tensors="pt",
-        padding=True,
-        truncation=True
-    )
-    input_ids = inputs["input_ids"].to(device)
-    attention_mask = inputs["attention_mask"].to(device)
+
+    input_ids = tokenizer.encode(PROMPT, return_tensors="pt").to(device)
+    attention_mask = input_ids.ne(tokenizer.pad_token_id).to(device)
 
     outputs = []
     for _ in range(n):
         gen_ids = model.generate(
             input_ids=input_ids,
-            attention_mask=attention_mask,   # important (explain in report)
+            attention_mask=attention_mask,
             do_sample=True,
             temperature=0.9,
             top_p=0.95,
@@ -107,37 +100,47 @@ def main():
 
     subset = load_from_disk(args.subset_path)
 
-    # 1 = positive, 0 = negative in IMDb
     pos = subset.filter(lambda x: x["label"] == 1).shuffle(seed=42).select(range(150))
     neg = subset.filter(lambda x: x["label"] == 0).shuffle(seed=42).select(range(150))
 
     pos_dir = os.path.join(args.models_dir, "gpt2_positive")
     neg_dir = os.path.join(args.models_dir, "gpt2_negative")
 
-    print("[INFO] Fine-tuning POSITIVE model...")
-    pos_model, pos_tok = finetune_one(pos, pos_dir)
+   # print("[INFO] Fine-tuning POSITIVE model...")
+    finetune_one(pos, pos_dir)
 
-    print("[INFO] Fine-tuning NEGATIVE model...")
-    neg_model, neg_tok = finetune_one(neg, neg_dir)
+   # print("[INFO] Fine-tuning NEGATIVE model...")
+    finetune_one(neg, neg_dir)
 
-    print("[INFO] Generating samples...")
+
+    pos_model = GPT2LMHeadModel.from_pretrained(pos_dir)
+    pos_tok   = GPT2Tokenizer.from_pretrained(pos_dir)
+
+    neg_model = GPT2LMHeadModel.from_pretrained(neg_dir)
+    neg_tok   = GPT2Tokenizer.from_pretrained(neg_dir)
+
+
+    pos_tok.pad_token = pos_tok.eos_token
+    neg_tok.pad_token = neg_tok.eos_token
+
+   # print("[INFO] Generating samples...")
     pos_gen = generate_samples(pos_model, pos_tok, n=10)
     neg_gen = generate_samples(neg_model, neg_tok, n=10)
 
     os.makedirs(os.path.dirname(args.output_file) or ".", exist_ok=True)
     with open(args.output_file, "w", encoding="utf-8") as f:
-        f.write("Reviews generated by POSITIVE fine-tuned GPT-2:\n")
+        f.write("Reviews generated by positive model:\n")
         for i, txt in enumerate(pos_gen, 1):
             f.write(f"\nReview {i}:\n{txt}\n")
 
-        f.write("\n" + "="*60 + "\n")
+        f.write("\n\n")
 
-        f.write("Reviews generated by NEGATIVE fine-tuned GPT-2:\n")
+        f.write("Reviews generated by negative model:\n")
         for i, txt in enumerate(neg_gen, 1):
             f.write(f"\nReview {i}:\n{txt}\n")
 
-    print(f"[DONE] Saved generations to: {args.output_file}")
-    print(f"[DONE] Saved models to: {args.models_dir}")
+   # print(f"[DONE] Saved generations to: {args.output_file}")
+   # print(f"[DONE] Saved models to: {args.models_dir}")
 
 if __name__ == "__main__":
     main()
