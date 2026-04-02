@@ -40,6 +40,4 @@ python make_subset.py
 
 Bash
 python bert_classification_finetuning.py
-1. Clone the repository:
-   ```bash
-   git clone [https://github.com/AhmadEgbaria1/NLP-homework5-LLM.git](https://github.com/AhmadEgbaria1/NLP-homework5-LLM.git)
+
