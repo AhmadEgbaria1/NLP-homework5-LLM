@@ -27,17 +27,26 @@ The project is divided into several key components:
 
 ## How to Run
 
-1. Clone the repository:
+## How to Run
+
+1. **Clone the repository:**
    ```bash
    git clone [https://github.com/AhmadEgbaria1/NLP-homework5-LLM.git](https://github.com/AhmadEgbaria1/NLP-homework5-LLM.git)
-   
-2.Create the data subset:
+Create the data subset:
 
 Bash
 python make_subset.py
+Run specific tasks:
 
-3.Run specific tasks:
+BERT classification:
 
 Bash
 python bert_classification_finetuning.py
+GPT generation:
 
+Bash
+python gpt_generation_finetuning.py
+FLAN-T5 prompting:
+
+Bash
+python flan_t5_prompt_engineering.py
